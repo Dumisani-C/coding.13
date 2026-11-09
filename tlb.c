@@ -1,3 +1,47 @@
+/*
+ * Chapter 19 Homework (Measurement) - Answers
+ * Dumisani Chikomo, CSC 425
+ *
+ * 1. Timer precision:
+ *    gettimeofday() only gives microseconds, and clock_gettime() can go down
+ *    to nanoseconds, but a single page access only takes a few nanoseconds.
+ *    That is way smaller than what one timer reading can reliably catch, so
+ *    timing one access by itself would just give 0 or noise. To time it
+ *    properly the whole loop has to run for at least a few milliseconds, so I
+ *    repeat the page accesses many times (10,000+ trials) and divide the total
+ *    time by (pages * trials) to get the average per access. I used
+ *    clock_gettime(CLOCK_MONOTONIC) since it is more precise.
+ *
+ * 2. The program:
+ *    tlb.c takes the number of pages and the number of trials as arguments.
+ *    It allocates an array that spans that many pages, then touches one int
+ *    per page (jumping PAGESIZE / sizeof(int) each time), repeats that for
+ *    every trial, and prints the average time per access in nanoseconds.
+ *    My runs: 1 page = ~2.5 ns, 64 pages = ~6.9 ns, 4096 pages = ~5.5 ns,
+ *    so the cost jumps once the pages no longer fit in the first-level TLB.
+ *
+ * 5. Compiler optimization:
+ *    The compiler could see that nothing reads a[] after the loop and just
+ *    delete the loop. To stop that I compile with plain gcc (no -O flag),
+ *    which means -O0 and no optimizations. Other options are declaring the
+ *    array volatile or using the results afterwards (like printing a sum) so
+ *    the compiler has to keep the loop.
+ *
+ * 6. Multiple CPUs:
+ *    Each CPU has its own TLB, so if the scheduler moves the program to
+ *    another CPU in the middle of the test, that CPU's TLB is cold and I get
+ *    a bunch of extra misses that make the numbers jump around. I pin the
+ *    program to CPU 0 with sched_setaffinity() at the start so it stays on
+ *    one CPU the whole time.
+ *
+ * 7. Initialization:
+ *    Yes, it would affect the timing. The first time a page is touched the OS
+ *    has to page fault and zero it out (demand zeroing), which is way more
+ *    expensive than a TLB miss and would make the first trial look really
+ *    slow. To fix that I touch every page once before starting the timer, so
+ *    only the normal accesses get measured.
+ */
+
 // tlb.c - measures the average cost of accessing one page,
 // based on the TLB homework in OSTEP Chapter 19.
 //
